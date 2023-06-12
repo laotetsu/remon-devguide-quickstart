@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>connectlive test page</title>
+    <meta charset="UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/@connectlive/connectlive-web-sdk/dist/connectlive-web-sdk.min.js"></script>
+  </head>
+
+  <body style="background-color: #f7e600">
+    <div id="app"></div>
+    <h1>카카오 i 커넥트라이브 음성채팅 샘플</h1>
+    <button id="connectButton">Connect</button>
+    <button id="disconnectButton">Disconnect</button>
+    <button id="shareButton" disabled="true">Screen</button>
+    <div class="local-container"></div>
+    <div class="remote-container"></div>
+<script>
+
+const roomId = 'voice-conference-sample',
+  connectButton = document.querySelector('#connectButton'),
+  disconnectButton = document.querySelector('#disconnectButton');
+
+let connected = false,
+  localMedia,
+  room;
+
+const connectRoom = async () => {
+  connected = true;
+  connectButton.innerHTML = 'connecting';
+  connectButton.disabled = connected;
+  // 1. 로그인
+  await ConnectLive.signIn({
+      serviceId: 'L28LUBJ4DTHF',
+      serviceSecret: 'L28LUBJ4DTHF1RM6:N7d0boy2bFMscXD3',
+  });
+
+  connectButton.innerHTML = 'log-in is successful';
+
+  // 2. local media 얻기
+  localMedia = await ConnectLive.createLocalMedia({ audio: true });
+
+  // 3. room을 만들거나 특정 room에 접속하고 이벤트 처리하기
+  room = await ConnectLive.createRoom();
+
+  if (!room) {
+    connectButton.innerHTML = 'failed to create room';
+    throw new Error('Failed to create room');
+  }
+
+  room.on('connected', (evt) => {
+      connectButton.innerHTML = 'connected';
+      if (!isMobile()) shareButton.disabled = false;
+      evt.remoteParticipants.forEach(async (member) => {
+        console.log('user: ' + member.id + ' is entered.');
+        const unsubscribeVideos = member.getUnsubscribedVideos();
+        room.subscribe([unsubscribeVideos[0].videoId]).then((remoteVideos) => {
+          const video = remoteVideos[0].attach();
+          document.querySelector('.remote-container').appendChild(video);
+        });
+      });
+    });
+    
+  room.on('remoteVideoPublished', (evt) => {
+    room.subscribe([evt.remoteVideo.videoId]).then((remoteVideos) => {
+      const video = remoteVideos[0].attach();
+      video.style.width = '30%';
+      document.querySelector('.remote-container').appendChild(video);
+    });
+  });
+
+  room.on('participantEntered', (evt) => {
+    console.log('user: ' + evt.remoteParticipant.id + ' is entered.');
+  });
+  room.on('participantLeft', (evt) => {
+    console.log('user: ' + evt.remoteParticipantId + ' is left.');
+  });
+
+  await room.connect(roomId);
+
+  // 4. 로컬미디어 송출하기
+  room.publish([localMedia]);
+};
+
+// 화면 공유 시작
+const screenshare = async () => {
+  screenMedia = await ConnectLive.createLocalScreen({
+    audio: true,
+    video: true,
+  });
+  const video = screenMedia.video.attach();
+  document.querySelector('.local-container').appendChild(video);
+  room.publish([screenMedia]);
+};  
+
+function isMobile() {
+  var UserAgent = navigator.userAgent;
+  if (
+    UserAgent.match(
+      /iPhone|iPod|Android|Windows CE|BlackBerry|Symbian|Windows Phone|webOS|Opera Mini|Opera Mobi|POLARIS|IEMobile|lgtelecom|nokia|SonyEricsson/i
+    ) != null ||
+    UserAgent.match(/LG|SAMSUNG|Samsung/) != null
+  ) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+const disconnectRoom = async () => {
+  // 5. 자원 해제
+  if (!room || !localMedia) return;
+  room.disconnect();
+  localMedia.stop();
+  ConnectLive.signOut();
+  connected = false;
+  connectButton.innerHTML = 'Connect';
+  connectButton.disabled = connected;
+  shareButton.disabled = true;
+};
+connectButton.onclick = connectRoom;
+disconnectButton.onclick = disconnectRoom;
+shareButton.onclick = screenshare;
+</script>
+  </body>
+</html>
